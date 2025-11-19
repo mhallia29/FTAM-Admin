@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Status - Integration Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .announcement-bar {
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+        .status-open {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status-closed {
+            background-color: #f44336;
+            color: white;
+        }
+        .status-paused {
+            background-color: #ff9800;
+            color: white;
+        }
+        .controls {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            font-weight: bold;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0b7dda;
+        }
+        input[type="number"] {
+            padding: 8px;
+            width: 100px;
+        }
+        .info {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Restaurant Status API - Integration Example</h1>
+    
+    <!-- Announcement Bar (like what would appear in Shopify) -->
+    <div id="announcementBar" class="announcement-bar status-open">
+        Restaurant is open for orders
+    </div>
+
+    <!-- Admin Controls -->
+    <div class="controls">
+        <h2>Admin Controls (for testing)</h2>
+        
+        <div class="control-group">
+            <button onclick="updateStatus('open')">Set to Open</button>
+            <button onclick="updateStatus('closed')">Set to Closed</button>
+        </div>
+        
+        <div class="control-group">
+            <label for="pauseTime">Pause Time (seconds):</label>
+            <input type="number" id="pauseTime" value="300" min="1">
+            <button onclick="pauseRestaurant()">Pause</button>
+        </div>
+    </div>
+
+    <!-- Information Display -->
+    <div class="info">
+        <h3>Current Status Information</h3>
+        <p><strong>Status:</strong> <span id="statusInfo">Loading...</span></p>
+        <p><strong>Remaining Time:</strong> <span id="timeInfo">--</span></p>
+        <p><strong>Last Updated:</strong> <span id="lastUpdate">--</span></p>
+    </div>
+
+    <script>
+        // Configuration - Change this to your deployed API URL
+        const API_URL = 'http://localhost:3000';
+        
+        // Auto-refresh interval (10 seconds)
+        const REFRESH_INTERVAL = 10000;
+        
+        /**
+         * Fetch and display current restaurant status
+         */
+        async function fetchStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/restaurant-status`);
+                const data = await response.json();
+                
+                updateDisplay(data);
+                
+            } catch (error) {
+                console.error('Error fetching status:', error);
+                document.getElementById('announcementBar').textContent = 
+                    'Unable to connect to server';
+                document.getElementById('announcementBar').className = 
+                    'announcement-bar status-closed';
+            }
+        }
+        
+        /**
+         * Update the display with status data
+         */
+        function updateDisplay(data) {
+            const bar = document.getElementById('announcementBar');
+            const statusInfo = document.getElementById('statusInfo');
+            const timeInfo = document.getElementById('timeInfo');
+            const lastUpdate = document.getElementById('lastUpdate');
+            
+            // Update announcement bar
+            bar.textContent = data.message;
+            bar.className = `announcement-bar status-${data.status}`;
+            
+            // Update info section
+            statusInfo.textContent = data.status.toUpperCase();
+            timeInfo.textContent = data.remainingTime > 0 
+                ? `${data.remainingTime} seconds` 
+                : 'N/A';
+            lastUpdate.textContent = new Date().toLocaleTimeString();
+        }
+        
+        /**
+         * Update restaurant status
+         */
+        async function updateStatus(status) {
+            try {
+                const response = await fetch(`${API_URL}/api/update-status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ status })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('Status updated:', data);
+                    fetchStatus(); // Refresh display
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+                
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Failed to update status');
+            }
+        }
+        
+        /**
+         * Pause restaurant for specified time
+         */
+        async function pauseRestaurant() {
+            const pauseTime = parseInt(document.getElementById('pauseTime').value);
+            
+            if (!pauseTime || pauseTime <= 0) {
+                alert('Please enter a valid pause time');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/update-status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        status: 'paused', 
+                        pauseTime: pauseTime 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('Restaurant paused:', data);
+                    fetchStatus(); // Refresh display
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+                
+            } catch (error) {
+                console.error('Error pausing restaurant:', error);
+                alert('Failed to pause restaurant');
+            }
+        }
+        
+        // Initial fetch
+        fetchStatus();
+        
+        // Set up auto-refresh
+        setInterval(fetchStatus, REFRESH_INTERVAL);
+        
+        console.log('Restaurant Status Integration Example loaded');
+        console.log('API URL:', API_URL);
+        console.log('Refresh interval:', REFRESH_INTERVAL, 'ms');
+    </script>
+</body>
+</html>
